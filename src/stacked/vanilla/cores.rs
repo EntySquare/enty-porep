@@ -26,10 +26,10 @@ pub struct CoreIndex(usize);
 pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
     match &*CORE_GROUPS {
         Some(groups) => {
-            let gpu_group_index = env::var("GPU_GROUP_INDEX").expect("GPU_GROUP_INDEX is not available!");
-            let gpu_group_index = gpu_group_index.parse::<usize>().expect("GPU_GROUP_INDEX is not a number!");
+            let cpu_group_index = env::var("CPU_GROUP_INDEX").expect("CPU_GROUP_INDEX is not available!");
+            let cpu_group_index = cpu_group_index.parse::<usize>().expect("CPU_GROUP_INDEX is not a number!");
             for (i, group) in groups.iter().enumerate() {
-                if i == gpu_group_index {
+                if i == cpu_group_index {
                     match group.try_lock() {
                         Ok(guard) => {
                             debug!("checked out core group {}", i);
