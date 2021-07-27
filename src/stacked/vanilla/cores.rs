@@ -5,6 +5,7 @@ use hwloc::{Bitmap, ObjectType, Topology, TopologyObject, CPUBIND_THREAD};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
+use std::env;
 
 type CoreGroup = Vec<CoreIndex>;
 lazy_static! {
@@ -25,13 +26,17 @@ pub struct CoreIndex(usize);
 pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
     match &*CORE_GROUPS {
         Some(groups) => {
+            let gpu_group_index = env::var("GPU_GROUP_INDEX").expect("GPU_GROUP is not available!");
+            let gpu_group_index = gpu_group_index.parse::<usize>().expect("GPU_GROUP is not a number!");
             for (i, group) in groups.iter().enumerate() {
-                match group.try_lock() {
-                    Ok(guard) => {
-                        debug!("checked out core group {}", i);
-                        return Some(guard);
+                if i == gpu_group_index {
+                    match group.try_lock() {
+                        Ok(guard) => {
+                            debug!("checked out core group {}", i);
+                            return Some(guard);
+                        }
+                        Err(_) => debug!("core group {} locked, could not checkout", i),
                     }
-                    Err(_) => debug!("core group {} locked, could not checkout", i),
                 }
             }
             None
