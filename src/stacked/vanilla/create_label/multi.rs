@@ -5,7 +5,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering::SeqCst},
     Arc, MutexGuard,
 };
-use std::thread;
+use std::{thread, env};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -450,6 +450,10 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
     let cache_window_nodes = SETTINGS.sdr_parents_cache_size as usize;
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
+    //TODO for test ,delete later
+    for (key, value) in env::vars() {
+        println!("create_labels_for_encoding()======>  {}  =>  {}", key, value);
+    }
 
     let core_group = Arc::new(checkout_core_group());
 
