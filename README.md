@@ -54,7 +54,12 @@ Using hwloc-ls command on cli to check whether L3-cache is shared through four c
     .
     .
     
-### In order to keep right core Indexes, you'll need to set CPU_GROUP_INDEX manually. But if you're using enty-fil-miner, it's automatically done by Kubernetes.
+### In order to keep right core Indexes, you'll need to set CPU_GROUP_INDEX manually.
+    
+    // i64 from 0 to 15 at different batch
+    CPU_GROUP_INDEX=0
+    
+But if you're using enty-fil-miner, it's automatically done by Kubernetes.
 
 ## License
 
