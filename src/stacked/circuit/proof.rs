@@ -21,6 +21,7 @@ use storage_proofs_core::{
 };
 
 use crate::stacked::{circuit::params::Proof, StackedDrg};
+use std::time::Instant;
 
 /// Stacked DRG based Proof of Replication.
 ///
@@ -104,19 +105,22 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
             ..
         } = self;
 
+        let now = Instant::now();
+        println!("proof.synthesize: handle replica_id start...");
         // Allocate replica_id
         let replica_id_num = AllocatedNum::alloc(cs.namespace(|| "replica_id"), || {
             replica_id
                 .map(Into::into)
                 .ok_or(SynthesisError::AssignmentMissing)
         })?;
-
         // make replica_id a public input
         replica_id_num.inputize(cs.namespace(|| "replica_id_input"))?;
-
         let replica_id_bits =
             reverse_bit_numbering(replica_id_num.to_bits_le(cs.namespace(|| "replica_id_bits"))?);
+        println!("proof.synthesize: handle replica_id end cost: {:?}",now.elapsed());
 
+        let now = Instant::now();
+        println!("proof.synthesize: handle comm_d start...");
         // Allocate comm_d as Fr
         let comm_d_num = AllocatedNum::alloc(cs.namespace(|| "comm_d"), || {
             comm_d
@@ -126,7 +130,10 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
 
         // make comm_d a public input
         comm_d_num.inputize(cs.namespace(|| "comm_d_input"))?;
+        println!("proof.synthesize: handle comm_d  end cost: {:?}",now.elapsed());
 
+        let now = Instant::now();
+        println!("proof.synthesize: handle comm_r start...");
         // Allocate comm_r as Fr
         let comm_r_num = AllocatedNum::alloc(cs.namespace(|| "comm_r"), || {
             comm_r
@@ -136,22 +143,31 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
 
         // make comm_r a public input
         comm_r_num.inputize(cs.namespace(|| "comm_r_input"))?;
+        println!("proof.synthesize: handle comm_r end cost: {:?}",now.elapsed());
 
+        let now = Instant::now();
+        println!("proof.synthesize: handle comm_r_last start...");
         // Allocate comm_r_last as Fr
         let comm_r_last_num = AllocatedNum::alloc(cs.namespace(|| "comm_r_last"), || {
             comm_r_last
                 .map(Into::into)
                 .ok_or(SynthesisError::AssignmentMissing)
         })?;
+        println!("proof.synthesize: handle comm_r_last end cost: {:?}",now.elapsed());
 
+        let now = Instant::now();
+        println!("proof.synthesize: handle comm_c start...");
         // Allocate comm_c as Fr
         let comm_c_num = AllocatedNum::alloc(cs.namespace(|| "comm_c"), || {
             comm_c
                 .map(Into::into)
                 .ok_or(SynthesisError::AssignmentMissing)
         })?;
+        println!("proof.synthesize: handle comm_c end cost: {:?}",now.elapsed());
 
         // Verify comm_r = H(comm_c || comm_r_last)
+        let now = Instant::now();
+        println!("proof.synthesize: handle hash2_circuit start...");
         {
             let hash_num = <Tree::Hasher as Hasher>::Function::hash2_circuit(
                 cs.namespace(|| "H_comm_c_comm_r_last"),
@@ -167,8 +183,13 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                 &hash_num,
             );
         }
+        println!("proof.synthesize: handle hash2_circuit end cost: {:?}",now.elapsed());
 
+        let now = Instant::now();
+        println!("proof.synthesize: handle proofs start...");
         for (i, proof) in proofs.into_iter().enumerate() {
+            let par_now = Instant::now();
+            println!("-- proof.synthesize: proof.synthesize start...");
             proof.synthesize(
                 &mut cs.namespace(|| format!("challenge_{}", i)),
                 public_params.layer_challenges.layers(),
@@ -177,8 +198,9 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                 &comm_r_last_num,
                 &replica_id_bits,
             )?;
+            println!("-- proof.synthesize: proof.synthesize end cost: {:?}",par_now.elapsed());
         }
-
+        println!("proof.synthesize: handle hash2_circuit end cost: {:?}",now.elapsed());
         Ok(())
     }
 }
