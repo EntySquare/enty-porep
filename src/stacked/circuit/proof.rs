@@ -187,9 +187,10 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
 
         let now = Instant::now();
         println!("proof.synthesize: handle proofs start...");
+        let mut times = 1 ;
         for (i, proof) in proofs.into_iter().enumerate() {
             let par_now = Instant::now();
-            println!("-- proof.synthesize: proof.synthesize start...");
+            println!("-{}- proof.synthesize: proof.synthesize start...",times);
             proof.synthesize(
                 &mut cs.namespace(|| format!("challenge_{}", i)),
                 public_params.layer_challenges.layers(),
@@ -198,7 +199,8 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                 &comm_r_last_num,
                 &replica_id_bits,
             )?;
-            println!("-- proof.synthesize: proof.synthesize end cost: {:?}",par_now.elapsed());
+            println!("-{}- proof.synthesize: proof.synthesize end cost: {:?}",times,par_now.elapsed());
+            times += 1;
         }
         println!("proof.synthesize: handle hash2_circuit end cost: {:?}",now.elapsed());
         Ok(())
