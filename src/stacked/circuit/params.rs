@@ -1,16 +1,17 @@
 use std::marker::PhantomData;
+use std::time::Instant;
 
 use bellperson::{
     bls::{Bls12, Fr},
-    gadgets::{boolean::Boolean, num::AllocatedNum, uint32::UInt32},
-    ConstraintSystem, SynthesisError,
+    ConstraintSystem,
+    gadgets::{boolean::Boolean, num::AllocatedNum, uint32::UInt32}, SynthesisError,
 };
 use filecoin_hashers::{Hasher, PoseidonArity};
 use generic_array::typenum::{U0, U2};
 use storage_proofs_core::{
     drgraph::Graph,
-    gadgets::por::{AuthPath, PoRCircuit},
     gadgets::{encode::encode, uint64::UInt64, variables::Root},
+    gadgets::por::{AuthPath, PoRCircuit},
     merkle::{DiskStore, MerkleProofTrait, MerkleTreeTrait, MerkleTreeWrapper},
     util::reverse_bit_numbering,
 };
@@ -114,6 +115,8 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             exp_parents_proofs,
             ..
         } = self;
+        let now = Instant::now();
+        println!("proof.synthesize start...");
 
         assert!(!drg_parents_proofs.is_empty());
         assert!(!exp_parents_proofs.is_empty());
@@ -272,14 +275,14 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                 &column_hash,
             )?;
         }
-
+        println!("proof.synthesize end cost:{:?}", now.elapsed());
         Ok(())
     }
 }
 
 impl<Tree: MerkleTreeTrait, G: Hasher> From<VanillaProof<Tree, G>> for Proof<Tree, G>
-where
-    Tree::Hasher: 'static,
+    where
+        Tree::Hasher: 'static,
 {
     fn from(vanilla_proof: VanillaProof<Tree, G>) -> Self {
         let VanillaProof {
@@ -317,11 +320,11 @@ fn enforce_inclusion<H, U, V, W, CS: ConstraintSystem<Bls12>>(
     root: &AllocatedNum<Bls12>,
     leaf: &AllocatedNum<Bls12>,
 ) -> Result<(), SynthesisError>
-where
-    H: 'static + Hasher,
-    U: 'static + PoseidonArity,
-    V: 'static + PoseidonArity,
-    W: 'static + PoseidonArity,
+    where
+        H: 'static + Hasher,
+        U: 'static + PoseidonArity,
+        V: 'static + PoseidonArity,
+        W: 'static + PoseidonArity,
 {
     let root = Root::from_allocated::<CS>(root.clone());
     let leaf = Root::from_allocated::<CS>(leaf.clone());

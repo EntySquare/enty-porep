@@ -1,13 +1,15 @@
 use std::marker::PhantomData;
+use std::time::Instant;
 
 use anyhow::ensure;
 use bellperson::{
     bls::{Bls12, Fr},
-    gadgets::num::AllocatedNum,
-    Circuit, ConstraintSystem, SynthesisError,
+    Circuit,
+    ConstraintSystem, gadgets::num::AllocatedNum, SynthesisError,
 };
-use filecoin_hashers::{HashFunction, Hasher};
+use filecoin_hashers::{Hasher, HashFunction};
 use fr32::u64_into_fr;
+use rayon::prelude::*;
 use storage_proofs_core::{
     compound_proof::{CircuitComponent, CompoundProof},
     drgraph::Graph,
@@ -21,8 +23,7 @@ use storage_proofs_core::{
 };
 
 use crate::stacked::{circuit::params::Proof, StackedDrg};
-use std::time::Instant;
-use rayon::prelude::*;
+
 /// Stacked DRG based Proof of Replication.
 ///
 /// # Fields
@@ -75,8 +76,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedCircuit<'a
         comm_c: Option<<Tree::Hasher as Hasher>::Domain>,
         proofs: Vec<Proof<Tree, G>>,
     ) -> Result<(), SynthesisError>
-    where
-        CS: ConstraintSystem<Bls12>,
+        where
+            CS: ConstraintSystem<Bls12>,
     {
         let circuit = StackedCircuit::<'a, Tree, G> {
             public_params,
@@ -104,7 +105,8 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
             comm_c,
             ..
         } = self;
-
+        let now = Instant::now();
+        println!("StackedCircuit.synthesize start...");
         // Allocate replica_id
         let replica_id_num = AllocatedNum::alloc(cs.namespace(|| "replica_id"), || {
             replica_id
@@ -168,6 +170,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
         }
 
         for (i, proof) in proofs.into_iter().enumerate() {
+            println!("[{}] into_iter proof.synthesize...", i);
             proof.synthesize(
                 &mut cs.namespace(|| format!("challenge_{}", i)),
                 public_params.layer_challenges.layers(),
@@ -177,6 +180,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Bls12> for StackedCircuit<'a,
                 &replica_id_bits,
             )?;
         }
+        println!("StackedCircuit.synthesize end cost:{:?}", now.elapsed());
         Ok(())
     }
 }
@@ -189,7 +193,7 @@ pub struct StackedCompound<Tree: MerkleTreeTrait, G: Hasher> {
 }
 
 impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait, G: Hasher>
-    CacheableParameters<C, P> for StackedCompound<Tree, G>
+CacheableParameters<C, P> for StackedCompound<Tree, G>
 {
     fn cache_prefix() -> String {
         format!(
@@ -201,8 +205,8 @@ impl<C: Circuit<Bls12>, P: ParameterSetMetadata, Tree: MerkleTreeTrait, G: Hashe
 }
 
 impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher>
-    CompoundProof<'a, StackedDrg<'a, Tree, G>, StackedCircuit<'a, Tree, G>>
-    for StackedCompound<Tree, G>
+CompoundProof<'a, StackedDrg<'a, Tree, G>, StackedCircuit<'a, Tree, G>>
+for StackedCompound<Tree, G>
 {
     fn generate_public_inputs(
         pub_in: &<StackedDrg<'_, Tree, G> as ProofScheme<'_>>::PublicInputs,
