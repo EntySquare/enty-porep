@@ -5,7 +5,6 @@ use hwloc::{Bitmap, ObjectType, Topology, TopologyObject, CPUBIND_THREAD};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
-use std::env;
 
 type CoreGroup = Vec<CoreIndex>;
 lazy_static! {
@@ -24,19 +23,15 @@ lazy_static! {
 pub struct CoreIndex(usize);
 
 pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
-    let cpu_group_index = env::var("CPU_GROUP_INDEX").expect("CPU_GROUP_INDEX is not available!");
-    let cpu_group_index = cpu_group_index.parse::<usize>().expect("CPU_GROUP_INDEX is not a number!");
     match &*CORE_GROUPS {
         Some(groups) => {
             for (i, group) in groups.iter().enumerate() {
-                if i == cpu_group_index {
-                    match group.try_lock() {
-                        Ok(guard) => {
-                            debug!("checked out core group {}", i);
-                            return Some(guard);
-                        }
-                        Err(_) => debug!("core group {} locked, could not checkout", i),
+                match group.try_lock() {
+                    Ok(guard) => {
+                        debug!("checked out core group {}", i);
+                        return Some(guard);
                     }
+                    Err(_) => debug!("core group {} locked, could not checkout", i),
                 }
             }
             None
@@ -205,7 +200,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "single-threaded")]
+    #[cfg(feature = "isolated-testing")]
+    // This test should not be run while other tests are running, as
+    // the cores we're working with may otherwise be busy and cause a
+    // failure.
     fn test_checkout_cores() {
         let checkout1 = checkout_core_group();
         dbg!(&checkout1);

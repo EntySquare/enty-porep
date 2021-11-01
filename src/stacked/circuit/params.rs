@@ -1,17 +1,16 @@
 use std::marker::PhantomData;
-use std::time::Instant;
 
 use bellperson::{
-    bls::{Bls12, Fr},
-    ConstraintSystem,
-    gadgets::{boolean::Boolean, num::AllocatedNum, uint32::UInt32}, SynthesisError,
+    gadgets::{boolean::Boolean, num::AllocatedNum, uint32::UInt32},
+    ConstraintSystem, SynthesisError,
 };
+use blstrs::Scalar as Fr;
 use filecoin_hashers::{Hasher, PoseidonArity};
 use generic_array::typenum::{U0, U2};
 use storage_proofs_core::{
     drgraph::Graph,
-    gadgets::{encode::encode, uint64::UInt64, variables::Root},
     gadgets::por::{AuthPath, PoRCircuit},
+    gadgets::{encode::encode, uint64::UInt64, variables::Root},
     merkle::{DiskStore, MerkleProofTrait, MerkleTreeTrait, MerkleTreeWrapper},
     util::reverse_bit_numbering,
 };
@@ -96,13 +95,13 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
 
     /// Circuit synthesis.
     #[allow(clippy::too_many_arguments)]
-    pub fn synthesize<CS: ConstraintSystem<Bls12>>(
+    pub fn synthesize<CS: ConstraintSystem<Fr>>(
         self,
         mut cs: CS,
         layers: usize,
-        comm_d: &AllocatedNum<Bls12>,
-        comm_c: &AllocatedNum<Bls12>,
-        comm_r_last: &AllocatedNum<Bls12>,
+        comm_d: &AllocatedNum<Fr>,
+        comm_c: &AllocatedNum<Fr>,
+        comm_r_last: &AllocatedNum<Fr>,
         replica_id: &[Boolean],
     ) -> Result<(), SynthesisError> {
         let Proof {
@@ -115,20 +114,16 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             exp_parents_proofs,
             ..
         } = self;
-        let start = Instant::now();
-        println!("proof.synthesize start : challenge= {:?}", challenge.unwrap());
 
         assert!(!drg_parents_proofs.is_empty());
         assert!(!exp_parents_proofs.is_empty());
 
         // -- verify initial data layer
-        let now = Instant::now();
-        println!("proof.synthesize: gen data_leaf_num start..");
+
         // PrivateInput: data_leaf
         let data_leaf_num = AllocatedNum::alloc(cs.namespace(|| "data_leaf"), || {
             data_leaf.ok_or(SynthesisError::AssignmentMissing)
         })?;
-        println!("proof.synthesize: gen data_leaf_num end duration:{:?}", now.elapsed());
 
         // enforce inclusion of the data leaf in the tree D
         enforce_inclusion(
@@ -139,8 +134,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
         )?;
 
         // -- verify replica column openings
-        let now = Instant::now();
-        println!("proof.synthesize: gen drg_parents start.. layers = {}", layers);
+
         // Private Inputs for the DRG parent nodes.
         let mut drg_parents = Vec::with_capacity(layers);
 
@@ -160,11 +154,8 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             )?;
             drg_parents.push(parent_col);
         }
-        println!("proof.synthesize: gen drg_parents end duration:{:?}", now.elapsed());
 
         // Private Inputs for the Expander parent nodes.
-        let now = Instant::now();
-        println!("proof.synthesize: gen exp_parents start..");
         let mut exp_parents = Vec::new();
 
         for (i, parent) in exp_parents_proofs.into_iter().enumerate() {
@@ -183,11 +174,9 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
             )?;
             exp_parents.push(parent_col);
         }
-        println!("proof.synthesize: exp_parents length = {}", exp_parents.len());
-        println!("proof.synthesize: gen exp_parents end duration:{:?}", now.elapsed());
+
         // -- Verify labeling and encoding
-        let now = Instant::now();
-        println!("proof.synthesize: gen column_labels start..");
+
         // stores the labels of the challenged column
         let mut column_labels = Vec::new();
 
@@ -196,14 +185,10 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
         challenge_num.pack_into_input(cs.namespace(|| "challenge input"))?;
 
         for layer in 1..=layers {
-            let par_start = Instant::now();
-            println!("-- layer[{}] create label start..", layer);
             let layer_num = UInt32::constant(layer as u32);
 
             let mut cs = cs.namespace(|| format!("labeling_{}", layer));
 
-            let par_now = Instant::now();
-            println!("-- layer[{}] collect the parents start..", layer);
             // Collect the parents
             let mut parents = Vec::new();
 
@@ -229,11 +214,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                     parents.push(parent_val_bits);
                 }
             }
-            println!("-- layer[{}] collect the parents : drg_parents len:{}, exp_parents:{}", layer, drg_parents.len(), exp_parents.len());
-            println!("-- layer[{}] collect the parents end duration:{:?}", layer, par_now.elapsed());
 
-            let par_now = Instant::now();
-            println!("-- layer[{}] expanded_parents start..", layer);
             // Duplicate parents, according to the hashing algorithm.
             let mut expanded_parents = parents.clone();
             if layer > 1 {
@@ -248,11 +229,7 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                 expanded_parents.extend_from_slice(&parents); // 36
                 expanded_parents.push(parents[0].clone()); // 37
             };
-            println!("-- layer[{}] expanded_parents : parents len:{}, expanded_parents:{}", layer, parents.len(), expanded_parents.len());
-            println!("-- layer[{}] expanded_parents end duration:{:?}", layer, par_now.elapsed());
 
-            let par_now = Instant::now();
-            println!("-- layer[{}] create_label_circuit start..", layer);
             // Reconstruct the label
             let label = create_label_circuit(
                 cs.namespace(|| "create_label"),
@@ -261,13 +238,8 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                 layer_num,
                 challenge_num.clone(),
             )?;
-            println!("-- layer[{}] create_label_circuit end duration:{:?}", layer, par_now.elapsed());
-
             column_labels.push(label);
-            println!("-- layer[{}] create label end duration:{:?}", layer, par_start.elapsed());
         }
-        println!("proof.synthesize: column_labels length = {}", column_labels.len());
-        println!("proof.synthesize: gen column_labels end duration:{:?}", now.elapsed());
 
         // -- encoding node
         {
@@ -300,14 +272,14 @@ impl<Tree: MerkleTreeTrait, G: 'static + Hasher> Proof<Tree, G> {
                 &column_hash,
             )?;
         }
-        println!("proof.synthesize end cost:{:?}", start.elapsed());
+
         Ok(())
     }
 }
 
 impl<Tree: MerkleTreeTrait, G: Hasher> From<VanillaProof<Tree, G>> for Proof<Tree, G>
-    where
-        Tree::Hasher: 'static,
+where
+    Tree::Hasher: 'static,
 {
     fn from(vanilla_proof: VanillaProof<Tree, G>) -> Self {
         let VanillaProof {
@@ -339,17 +311,17 @@ impl<Tree: MerkleTreeTrait, G: Hasher> From<VanillaProof<Tree, G>> for Proof<Tre
 }
 
 /// Enforce the inclusion of the given path, to the given leaf and the root.
-fn enforce_inclusion<H, U, V, W, CS: ConstraintSystem<Bls12>>(
+fn enforce_inclusion<H, U, V, W, CS: ConstraintSystem<Fr>>(
     cs: CS,
     path: AuthPath<H, U, V, W>,
-    root: &AllocatedNum<Bls12>,
-    leaf: &AllocatedNum<Bls12>,
+    root: &AllocatedNum<Fr>,
+    leaf: &AllocatedNum<Fr>,
 ) -> Result<(), SynthesisError>
-    where
-        H: 'static + Hasher,
-        U: 'static + PoseidonArity,
-        V: 'static + PoseidonArity,
-        W: 'static + PoseidonArity,
+where
+    H: 'static + Hasher,
+    U: 'static + PoseidonArity,
+    V: 'static + PoseidonArity,
+    W: 'static + PoseidonArity,
 {
     let root = Root::from_allocated::<CS>(root.clone());
     let leaf = Root::from_allocated::<CS>(leaf.clone());
