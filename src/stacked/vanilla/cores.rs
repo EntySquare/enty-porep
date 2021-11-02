@@ -1,10 +1,11 @@
 use std::sync::{Mutex, MutexGuard};
 
 use anyhow::{format_err, Result};
-use hwloc::{Bitmap, ObjectType, Topology, TopologyObject, CPUBIND_THREAD};
+use hwloc::{Bitmap, CPUBIND_THREAD, ObjectType, Topology, TopologyObject};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use storage_proofs_core::settings::SETTINGS;
+use std::env;
 
 type CoreGroup = Vec<CoreIndex>;
 lazy_static! {
@@ -23,15 +24,19 @@ lazy_static! {
 pub struct CoreIndex(usize);
 
 pub fn checkout_core_group() -> Option<MutexGuard<'static, CoreGroup>> {
+    let cpu_group_index = env::var("CPU_GROUP_INDEX").expect("CPU_GROUP_INDEX is not available!");
+    let cpu_group_index = cpu_group_index.parse::<usize>().expect("CPU_GROUP_INDEX is not a number!");
     match &*CORE_GROUPS {
         Some(groups) => {
             for (i, group) in groups.iter().enumerate() {
-                match group.try_lock() {
-                    Ok(guard) => {
-                        debug!("checked out core group {}", i);
-                        return Some(guard);
+                if i == cpu_group_index {
+                    match group.try_lock() {
+                        Ok(guard) => {
+                            debug!("checked out core group {}", i);
+                            return Some(guard);
+                        }
+                        Err(_) => debug!("core group {} locked, could not checkout", i),
                     }
-                    Err(_) => debug!("core group {} locked, could not checkout", i),
                 }
             }
             None
