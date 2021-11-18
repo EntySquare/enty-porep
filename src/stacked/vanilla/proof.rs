@@ -428,7 +428,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         ColumnArity: 'static + PoseidonArity,
         TreeArity: PoseidonArity,
     {
+        info!{"generate_tree_c: SETTINGS.use_gpu_column_builder:{}",SETTINGS.use_gpu_column_builder}
         if SETTINGS.use_gpu_column_builder {
+            info!{"generate_tree_c::generate_tree_c_gpu start..."}
             Self::generate_tree_c_gpu::<ColumnArity, TreeArity>(
                 layers,
                 nodes_count,
@@ -437,6 +439,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 labels,
             )
         } else {
+            info!{"generate_tree_c::generate_tree_c_cpu start..."}
             Self::generate_tree_c_cpu::<ColumnArity, TreeArity>(
                 layers,
                 nodes_count,

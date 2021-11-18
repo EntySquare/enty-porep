@@ -454,10 +454,10 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
 
-    //TODO for test ,delete later
-    for (key, value) in env::vars() {
-        println!("create_labels_for_encoding()======>  {}  =>  {}", key, value);
-    }
+    // for test ,delete later
+    // for (key, value) in env::vars() {
+    //     println!("create_labels_for_encoding()======>  {}  =>  {}", key, value);
+    // }
     let core_group = Arc::new(checkout_core_group());
 
     // When `_cleanup_handle` is dropped, the previous binding of thread will be restored.
