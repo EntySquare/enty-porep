@@ -318,8 +318,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
         #[cfg(feature = "multicore-sdr")]
         {
+            info!("SETTINGS.use_multicore_sdr:{}",SETTINGS.use_multicore_sdr);
             if SETTINGS.use_multicore_sdr {
-                info!("multi core replication");
+                info!("generate_labels_for_encoding=>multi core replication start...");
                 create_label::multi::create_labels_for_encoding(
                     graph,
                     &parent_cache,
@@ -328,7 +329,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     config,
                 )
             } else {
-                info!("single core replication");
+                info!("generate_labels_for_encoding=>single core replication start...");
                 create_label::single::create_labels_for_encoding(
                     graph,
                     &mut parent_cache,
