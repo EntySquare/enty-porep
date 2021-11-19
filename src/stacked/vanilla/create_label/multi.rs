@@ -223,9 +223,9 @@ fn create_layer_labels(
 
         (lookahead, num_producers, producer_stride)
     };
-
+    info!("lookahead: {},num_producers:{},producer_stride:{}", lookahead,num_producers,producer_stride);
     const BYTES_PER_NODE: usize = (NODE_SIZE * DEGREE) + SHA_BLOCK_SIZE;
-
+    info!("BYTES_PER_NODE: {}", BYTES_PER_NODE);
     let mut ring_buf = RingBuf::new(BYTES_PER_NODE, lookahead);
     let mut base_parent_missing = vec![BitMask::default(); lookahead];
 
@@ -447,13 +447,13 @@ pub fn create_labels_for_encoding<Tree: 'static + MerkleTreeTrait, T: AsRef<[u8]
     info!("create labels");
 
     let layer_states = prepare_layers::<Tree>(graph, &config, layers);
-
+    info!("layer_states:{:?}",layer_states);
     let sector_size = graph.size() * NODE_SIZE;
     let node_count = graph.size() as u64;
     let cache_window_nodes = SETTINGS.sdr_parents_cache_size as usize;
 
     let default_cache_size = DEGREE * 4 * cache_window_nodes;
-
+    info!("sector_size:{},node_count:{} ,cache_window_nodes:{}",sector_size,node_count,cache_window_nodes);
     // for test ,delete later
     // for (key, value) in env::vars() {
     //     println!("create_labels_for_encoding()======>  {}  =>  {}", key, value);
