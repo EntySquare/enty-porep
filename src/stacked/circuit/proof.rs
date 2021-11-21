@@ -103,7 +103,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Fr> for StackedCircuit<'a, Tr
         } = self;
 
         let now = Instant::now();
-        println!("StackedCircuit.synthesize start...");
+        info!("StackedCircuit.synthesize start...");
         // Allocate replica_id
         let replica_id_num = AllocatedNum::alloc(cs.namespace(|| "replica_id"), || {
             replica_id
@@ -169,7 +169,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Fr> for StackedCircuit<'a, Tr
         }
 
         for (i, proof) in proofs.into_iter().enumerate() {
-            println!("[{}] into_iter proof.synthesize...", i);
+            debug!("[{}] into_iter proof.synthesize...", i);
             proof.synthesize(
                 &mut cs.namespace(|| format!("challenge_{}", i)),
                 public_params.layer_challenges.layers(),
@@ -179,7 +179,7 @@ impl<'a, Tree: MerkleTreeTrait, G: Hasher> Circuit<Fr> for StackedCircuit<'a, Tr
                 &replica_id_bits,
             )?;
         }
-        println!("StackedCircuit.synthesize end cost:{:?}", now.elapsed());
+        info!("StackedCircuit.synthesize end cost:{:?}", now.elapsed());
         Ok(())
     }
 }
