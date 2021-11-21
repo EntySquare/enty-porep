@@ -22,7 +22,7 @@ use crate::stacked::{
     },
 };
 use std::time::Instant;
-use log::{debug, info};
+use log::{debug, info,trace};
 
 type TreeAuthPath<T> = AuthPath<
     <T as MerkleTreeTrait>::Hasher,
