@@ -19,7 +19,7 @@ use storage_proofs_core::{
 
 use crate::stacked::{circuit::params::Proof, StackedDrg};
 use std::time::Instant;
-
+use log::{debug, info};
 /// Stacked DRG based Proof of Replication.
 ///
 /// # Fields

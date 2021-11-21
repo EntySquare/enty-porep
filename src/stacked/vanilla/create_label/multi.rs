@@ -5,7 +5,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering::SeqCst}, MutexGuard,
 };
-use std::{thread, env};
+use std::{thread};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
