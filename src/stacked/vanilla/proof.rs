@@ -10,7 +10,7 @@ use fdlimit::raise_fd_limit;
 use filecoin_hashers::{Domain, HashFunction, Hasher, PoseidonArity};
 use generic_array::typenum::{Unsigned, U0, U11, U2, U8};
 use lazy_static::lazy_static;
-use log::{error, info, trace};
+use log::{error, info, trace, debug};
 use merkletree::{
     merkle::{get_merkle_tree_len, is_merkle_tree_size_valid},
     store::{Store, StoreConfig},
@@ -51,6 +51,7 @@ use crate::{
     },
     PoRep,
 };
+use std::time::Instant;
 
 pub const TOTAL_PARENTS: usize = 37;
 
@@ -431,7 +432,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
     {
         info!{"generate_tree_c: SETTINGS.use_gpu_column_builder:{}",SETTINGS.use_gpu_column_builder}
         if SETTINGS.use_gpu_column_builder {
-            info!{"generate_tree_c::generate_tree_c_gpu start..."}
+            info!{"match generate_tree_c_gpu"}
             Self::generate_tree_c_gpu::<ColumnArity, TreeArity>(
                 layers,
                 nodes_count,
@@ -440,7 +441,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                 labels,
             )
         } else {
-            info!{"generate_tree_c::generate_tree_c_cpu start..."}
+            info!{"match generate_tree_c_cpu"}
             Self::generate_tree_c_cpu::<ColumnArity, TreeArity>(
                 layers,
                 nodes_count,
@@ -590,6 +591,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                             builder_tx
                                 .send((columns, is_final))
                                 .expect("failed to send columns");
+                            debug!("builder_tx send columns: {}/{}", i + 1, tree_count);
                         }
                     }
                 });
@@ -615,15 +617,17 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         loop {
                             let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
                                 builder_rx.recv().expect("failed to recv columns");
-
+                            debug!("builder_rx send columns: {}/{}", i + 1, tree_count);
                             // Just add non-final column batches.
                             if !is_final {
+                                debug!("add_columns and continue");
                                 column_tree_builder
                                     .add_columns(&columns)
                                     .expect("failed to add columns");
                                 continue;
                             };
-
+                            let now = Instant::now();
+                            debug!("add_final_columns start..");
                             // If we get here, this is a final column: build a sub-tree.
                             let (base_data, tree_data) = column_tree_builder
                                 .add_final_columns(&columns)
@@ -633,6 +637,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                                 base_data.len(),
                                 tree_data.len()
                             );
+                            debug!("add_final_columns end cost:{:?}",now.elapsed());
 
                             let tree_len = base_data.len() + tree_data.len();
                             info!(
@@ -1257,7 +1262,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             }
             None => error!("Failed to raise the fd limit"),
         };
-
+        let now = Instant::now();
+        info!("tree_c start..");
         let tree_c_root = match layers {
             2 => {
                 let tree_c = Self::generate_tree_c::<U2, Tree::Arity>(
@@ -1291,7 +1297,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             }
             _ => panic_any("Unsupported column arity"),
         };
-        info!("tree_c done");
+        info!("tree_c done cost:{:?}", now.elapsed());
 
         // Build the MerkleTree over the original data (if needed).
         let tree_d = match data_tree {
@@ -1318,6 +1324,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         drop(tree_d);
 
         // Encode original data into the last layer.
+        let now = Instant::now();
         info!("building tree_r_last");
         let tree_r_last = measure_op(Operation::GenerateTreeRLast, || {
             Self::generate_tree_r_last::<Tree::Arity>(
@@ -1330,7 +1337,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             )
             .context("failed to generate tree_r_last")
         })?;
-        info!("tree_r_last done");
+        info!("tree_r_last done cost:{:?}", now.elapsed());
 
         let tree_r_last_root = tree_r_last.root();
         drop(tree_r_last);
