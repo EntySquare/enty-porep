@@ -521,6 +521,9 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             let (builder_tx, builder_rx) = channel(0);
 
             let config_count = configs.len(); // Don't move config into closure below.
+
+            debug!("config_count:{}, tree_count:{}", config_count, tree_count);
+
             THREAD_POOL.scoped(|s| {
                 // This channel will receive the finished tree data to be written to disk.
                 let (writer_tx, writer_rx) = channel::<(Vec<Fr>, Vec<Fr>)>(0);
@@ -617,7 +620,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         loop {
                             let (columns, is_final): (Vec<GenericArray<Fr, ColumnArity>>, bool) =
                                 builder_rx.recv().expect("failed to recv columns");
-                            debug!("builder_rx send columns: {}/{}", i + 1, tree_count);
+                            debug!("builder_rx recieve columns: {}/{}", i + 1, tree_count);
                             // Just add non-final column batches.
                             if !is_final {
                                 debug!("add_columns and continue");
@@ -901,6 +904,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         let config_count = configs.len(); // Don't move config into closure below.
         let configs = &configs;
         let tree_r_last_config = &tree_r_last_config;
+        debug!("config_count:{}, tree_count:{}", config_count, tree_count);
 
         THREAD_POOL.scoped(|s| {
             // This channel will receive the finished tree data to be written to disk.
@@ -977,6 +981,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         builder_tx
                             .send((encoded, is_final))
                             .expect("failed to send encoded");
+                        debug!("builder_tx send columns: {}/{}", i + 1, tree_count);
                     }
                 }
             });
@@ -998,15 +1003,17 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                     loop {
                         let (encoded, is_final) =
                             builder_rx.recv().expect("failed to recv encoded data");
-
+                        debug!("builder_rx recieve columns: {}/{}", i + 1, tree_count);
                         // Just add non-final leaf batches.
                         if !is_final {
+                            debug!("add_leaves and continue");
                             tree_builder
                                 .add_leaves(&encoded)
                                 .expect("failed to add leaves");
                             continue;
                         };
-
+                        let now = Instant::now();
+                        debug!("add_final_leaves start..");
                         // If we get here, this is a final leaf batch: build a sub-tree.
                         info!(
                             "building base tree_r_last with GPU {}/{}",
@@ -1016,7 +1023,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
                         let (_, tree_data) = tree_builder
                             .add_final_leaves(&encoded)
                             .expect("failed to add final leaves");
-
+                        debug!("add_final_leaves end cost:{:?}",now.elapsed());
                         writer_tx.send(tree_data).expect("failed to send tree_data");
                         break;
                     }
@@ -1188,11 +1195,11 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         replica_path: PathBuf,
         label_configs: Labels<Tree>,
     ) -> Result<TransformedLayers<Tree, G>> {
-        trace!("transform_and_replicate_layers");
+        info!("transform_and_replicate_layers");
         let nodes_count = graph.size();
 
         assert_eq!(data.len(), nodes_count * NODE_SIZE);
-        trace!("nodes count {}, data len {}", nodes_count, data.len());
+        debug!("nodes count: {},NODE_SIZE: {}, data len: {}", nodes_count, NODE_SIZE, data.len());
 
         let tree_count = get_base_tree_count::<Tree>();
         let nodes_count = graph.size() / tree_count;
@@ -1216,7 +1223,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
 
         let layers = layer_challenges.layers();
         assert!(layers > 0);
-
+        debug!("layers: {}", layers);
         // Generate all store configs that we need based on the
         // cache_path in the specified config.
         let mut tree_d_config = StoreConfig::from_config(
@@ -1298,6 +1305,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             _ => panic_any("Unsupported column arity"),
         };
         info!("tree_c done cost:{:?}", now.elapsed());
+        debug!("comm_c:{:?}", tree_c_root);
 
         // Build the MerkleTree over the original data (if needed).
         let tree_d = match data_tree {
@@ -1322,7 +1330,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         );
         let tree_d_root = tree_d.root();
         drop(tree_d);
-
+        debug!("comm_d:{:?}", tree_d_root);
         // Encode original data into the last layer.
         let now = Instant::now();
         info!("building tree_r_last");
@@ -1337,16 +1345,17 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             )
             .context("failed to generate tree_r_last")
         })?;
-        info!("tree_r_last done cost:{:?}", now.elapsed());
+        info!("comm_r_last done cost:{:?}", now.elapsed());
 
         let tree_r_last_root = tree_r_last.root();
         drop(tree_r_last);
-
+        info!("tree_r_last_root:{:?}", tree_r_last_root);
         data.drop_data()?;
 
         // comm_r = H(comm_c || comm_r_last)
         let comm_r: <Tree::Hasher as Hasher>::Domain =
             <Tree::Hasher as Hasher>::Function::hash2(&tree_c_root, &tree_r_last_root);
+        debug!("comm_r:{:?}", comm_r);
 
         Ok((
             Tau {
@@ -1373,13 +1382,13 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         replica_id: &<Tree::Hasher as Hasher>::Domain,
         config: StoreConfig,
     ) -> Result<Labels<Tree>> {
-        info!("replicate_phase1");
-
+        let now = Instant::now();
+        info!("replicate_phase1 start");
         let labels = measure_op(Operation::EncodeWindowTimeAll, || {
             Self::generate_labels_for_encoding(&pp.graph, &pp.layer_challenges, replica_id, config)
         })?
         .0;
-
+        info!("replicate_phase1 done cost:{:?}",now.elapsed());
         Ok(labels)
     }
 
@@ -1396,8 +1405,8 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
         <Self as PoRep<'a, Tree::Hasher, G>>::Tau,
         <Self as PoRep<'a, Tree::Hasher, G>>::ProverAux,
     )> {
-        info!("replicate_phase2");
-
+        let now = Instant::now();
+        info!("replicate_phase2 start");
         let (tau, paux, taux) = Self::transform_and_replicate_layers_inner(
             &pp.graph,
             &pp.layer_challenges,
@@ -1407,7 +1416,7 @@ impl<'a, Tree: 'static + MerkleTreeTrait, G: 'static + Hasher> StackedDrg<'a, Tr
             replica_path,
             label_configs,
         )?;
-
+        info!("replicate_phase2 done cost:{:?}",now.elapsed());
         Ok((tau, (paux, taux)))
     }
 
