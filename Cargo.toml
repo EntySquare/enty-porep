@@ -13,7 +13,7 @@
 [package]
 edition = "2018"
 name = "storage-proofs-porep"
-version = "10.0.0"
+version = "11.0.2"
 authors = ["dignifiedquire <me@dignifiedquire.com>"]
 description = "Proofs of replication"
 readme = "README.md"
@@ -31,7 +31,7 @@ harness = false
 version = "1.0.23"
 
 [dependencies.bellperson]
-version = "0.17.0"
+version = "0.18.0"
 
 [dependencies.bincode]
 version = "1.1.2"
@@ -61,12 +61,12 @@ version = "0.11.0"
 version = "0.1"
 
 [dependencies.filecoin-hashers]
-version = "^5.0.0"
+version = "^6.0.0"
 features = ["poseidon", "sha256"]
 default-features = false
 
 [dependencies.fr32]
-version = "^3.0.0"
+version = "^4.0.0"
 default-features = false
 
 [dependencies.generic-array]
@@ -95,7 +95,7 @@ version = "0.8.0"
 version = "0.21.0"
 
 [dependencies.neptune]
-version = "5.0.0"
+version = "5.1.0"
 features = ["arity2", "arity4", "arity8", "arity11", "arity16", "arity24", "arity36"]
 
 [dependencies.num-bigint]
@@ -127,10 +127,10 @@ features = ["derive"]
 version = "1.0"
 
 [dependencies.sha2raw]
-version = "^5.0.0"
+version = "^6.0.0"
 
 [dependencies.storage-proofs-core]
-version = "^10.0.0"
+version = "^11.0.0"
 default-features = false
 
 [dependencies.yastl]
@@ -139,7 +139,7 @@ version = "0.1.2"
 version = "0.3.2"
 
 [dev-dependencies.filecoin-hashers]
-version = "^5.0.0"
+version = "^6.0.0"
 features = ["poseidon", "sha256", "blake2s"]
 default-features = false
 
